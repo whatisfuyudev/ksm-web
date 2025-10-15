@@ -1,0 +1,28 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Login / Register</title>
+  <script src="js/app.js" defer></script>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@latest/dist/tailwind.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-100 p-6">
+  <div class="max-w-md mx-auto bg-white p-6 rounded shadow">
+    <h1 class="text-xl font-bold mb-4">Login</h1>
+    <input id="loginIdentifier" class="w-full p-2 border mb-2" placeholder="username or email" />
+    <input id="loginPassword" type="password" class="w-full p-2 border mb-2" placeholder="password" />
+    <button id="btnLogin" class="w-full bg-blue-600 text-white py-2 rounded">Login</button>
+    <div class="mt-4 text-sm">
+      Belum punya akun? <a href="#" id="showRegister" class="text-blue-600">Register</a>
+    </div>
+
+    <div id="registerBox" class="hidden mt-4">
+      <h2 class="text-lg font-semibold">Register</h2>
+      <input id="regUsername" class="w-full p-2 border mb-2" placeholder="username" />
+      <input id="regEmail" class="w-full p-2 border mb-2" placeholder="email" />
+      <input id="regPassword" type="password" class="w-full p-2 border mb-2" placeholder="password" />
+      <button id="btnRegister" class="w-full bg-green-600 text-white py-2 rounded">Register</button>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,34 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Feed</title>
+  <script src="js/app.js" defer></script>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@latest/dist/tailwind.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-50 p-6">
+  <div class="max-w-3xl mx-auto">
+    <div class="flex justify-between items-center mb-4">
+      <h1 class="text-2xl font-bold">Feed</h1>
+      <button id="btnLogout" class="px-3 py-1 border rounded">Logout</button>
+    </div>
+
+    <div class="bg-white p-4 rounded shadow mb-4">
+      <textarea id="postContent" class="w-full border p-2" rows="3" placeholder="What's happening?"></textarea>
+      <button id="btnPost" class="mt-2 bg-blue-600 text-white px-4 py-2 rounded">Post</button>
+    </div>
+
+    <div id="postsContainer"></div>
+  </div>
+
+  <!-- template minimal untuk komentar -->
+  <template id="commentTemplate">
+    <div class="pl-4 border-l mt-2">
+      <div class="text-sm"><strong class="author"></strong> <span class="meta text-gray-500 text-xs"></span></div>
+      <div class="content mt-1"></div>
+      <button class="replyBtn text-xs text-blue-600 mt-1">Reply</button>
+      <div class="replies mt-2"></div>
+    </div>
+  </template>
+</body>
+</html>
