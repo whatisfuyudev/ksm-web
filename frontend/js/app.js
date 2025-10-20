@@ -10,175 +10,208 @@ async function apiFetch(url, opts = {}) {
   opts.headers = opts.headers || {};
   const token = getToken();
   if(token) opts.headers['Authorization'] = 'Bearer ' + token;
-  opts.headers['Content-Type'] = opts.headers['Content-Type'] || 'application/json';
+  if(!opts.body) opts.headers['Content-Type'] = opts.headers['Content-Type'] || 'application/json';
   const res = await fetch(url, opts);
-  if(res.status === 401){ clearToken(); window.location = '/'; throw new Error('unauthorized'); }
+  if(res.status === 401){ clearToken(); window.location = '/login.html'; throw new Error('unauthorized'); }
   return res.json();
 }
 
-/* LOGIN & REGISTER (index.html) */
+/* DOM ready */
 document.addEventListener('DOMContentLoaded', () => {
-  const loginBtn = document.getElementById('btnLogin');
-  if(loginBtn){
-    document.getElementById('showRegister').onclick = e => {
-      e.preventDefault(); document.getElementById('registerBox').classList.toggle('hidden');
-    };
-
-    loginBtn.onclick = async () => {
-      const identifier = document.getElementById('loginIdentifier').value;
-      const password = document.getElementById('loginPassword').value;
-      const r = await fetch(AUTH_URL + '/login', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ usernameOrEmail: identifier, password })
-      });
-      const data = await r.json();
-      if(r.ok){ setToken(data.token); window.location = '/feed.html'; }
-      else alert(data.message || 'Login failed');
-    };
-
-    document.getElementById('btnRegister').onclick = async () => {
-      const username = document.getElementById('regUsername').value;
-      const email = document.getElementById('regEmail').value;
-      const password = document.getElementById('regPassword').value;
-      const r = await fetch(AUTH_URL + '/register', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ username, email, password })
-      });
-      const data = await r.json();
-      if(r.ok){ setToken(data.token); window.location = '/feed.html'; }
-      else alert(data.message || 'Register failed');
-    };
-  }
-
-  /* FEED logic (feed.html) */
+  // logout (desktop)
   const logoutBtn = document.getElementById('btnLogout');
-  if(logoutBtn){
-    logoutBtn.onclick = () => { clearToken(); window.location = '/'; };
-    loadFeed();
+  if(logoutBtn) logoutBtn.onclick = () => { clearToken(); window.location = '/login.html'; };
 
-    document.getElementById('btnPost').onclick = async () => {
-      const content = document.getElementById('postContent').value;
-      if(!content) return alert('isi dulu');
+  // Post
+  const postBtn = document.getElementById('btnPost');
+  if(postBtn){
+    postBtn.onclick = async () => {
+      const content = document.getElementById('postContent').value.trim();
+      if(!content) return alert('Isi dulu');
       try {
-        const res = await apiFetch(POST_URL, { method: 'POST', body: JSON.stringify({ content }) });
+        await apiFetch(POST_URL, { method: 'POST', body: JSON.stringify({ content }) });
         document.getElementById('postContent').value = '';
         loadFeed();
-      } catch(e) { console.error(e); alert('error'); }
+      } catch(e){ console.error(e); alert('error saat posting'); }
     };
   }
+
+  // mobile compose focus
+  const mobileCompose = document.getElementById('mobileCompose');
+  if(mobileCompose){
+    mobileCompose.onclick = () => { window.scrollTo({ top: 0, behavior: 'smooth' }); const ta = document.getElementById('postContent'); if(ta) ta.focus(); };
+  }
+
+  loadFeed();
 });
 
-/* load posts and comments for each */
+/* load feed */
 async function loadFeed(){
   const container = document.getElementById('postsContainer');
-  container.innerHTML = 'Loading...';
-  const data = await apiFetch(POST_URL + '?limit=20&page=1');
-  container.innerHTML = '';
-  for(const p of data.posts){
-    const el = document.createElement('div');
-    el.className = 'bg-white p-4 rounded shadow mb-3';
-    el.innerHTML = `<div class="text-sm text-gray-600 mb-2">Post by <strong>${(p.author && p.author.username) || p.authorId}</strong> • ${new Date(p.createdAt).toLocaleString()}</div>
-      <div class="mb-2">${escapeHtml(p.content)}</div>
-      <div class="comments"></div>
-      <div class="mt-2">
-        <input placeholder="Add a comment..." class="commentInput border p-2 w-full" />
-        <button class="btnComment mt-2 bg-gray-800 text-white px-3 py-1 rounded">Comment</button>
-      </div>`;
-    container.appendChild(el);
-
-    // bind comment create
-    const btn = el.querySelector('.btnComment');
-    btn.onclick = async () => {
-      const input = el.querySelector('.commentInput');
-      const content = input.value;
-      if(!content) return;
-      try {
-        await apiFetch(COMMENT_URL + '/' + p._id, { method: 'POST', body: JSON.stringify({ content }) });
-        input.value = '';
-        renderCommentsForPost(p._id, el.querySelector('.comments'));
-      } catch(e){ console.error(e); alert('cannot comment'); }
-    };
-
-    // render comments
-    renderCommentsForPost(p._id, el.querySelector('.comments'));
+  container.innerHTML = '<div class="text-center text-gray-500 py-8">Loading...</div>';
+  try {
+    const data = await apiFetch(POST_URL + '?limit=20&page=1');
+    container.innerHTML = '';
+    for(const p of data.posts){
+      container.appendChild(renderPost(p));
+    }
+  } catch(e){
+    console.error(e);
+    container.innerHTML = '<div class="text-center text-red-500 py-8">Gagal memuat feed.</div>';
   }
 }
 
-/* fetch comments and build tree, then render recursively */
-async function renderCommentsForPost(postId, targetEl){
-  targetEl.innerHTML = 'Loading comments...';
-  const res = await apiFetch(COMMENT_URL + '/' + postId);
-  const comments = res.comments || [];
-  const tree = buildCommentTree(comments);
-  targetEl.innerHTML = '';
-  for(const node of tree){
-    targetEl.appendChild(renderCommentNode(node));
-  }
-}
+/* render post */
+function renderPost(p){
+  const wrap = document.createElement('div');
+  wrap.className = 'bg-white p-4 rounded-xl shadow-sm';
 
-/* build a parent->children tree as array of root nodes */
-function buildCommentTree(comments){
-  const map = {};
-  comments.forEach(c => { c.children = []; map[c._id] = c; });
-  const roots = [];
-  comments.forEach(c => {
-    if(c.parentCommentId){
-      const parent = map[c.parentCommentId];
-      if(parent) parent.children.push(c);
-      else roots.push(c);
-    } else roots.push(c);
-  });
-  return roots;
-}
+  const header = document.createElement('div');
+  header.className = 'text-sm text-gray-600 mb-2';
+  header.innerHTML = `Post by <strong>${escapeHtml((p.author && p.author.username) || p.authorId)}</strong> • ${new Date(p.createdAt).toLocaleString()}`;
 
-/* render node recursively */
-function renderCommentNode(node){
-  const template = document.getElementById('commentTemplate');
-  const clone = template.content.cloneNode(true);
-  clone.querySelector('.author').textContent = node.authorId;
-  clone.querySelector('.meta').textContent = new Date(node.createdAt).toLocaleString();
-  clone.querySelector('.content').textContent = node.content;
-  const repliesContainer = clone.querySelector('.replies');
+  const content = document.createElement('div');
+  content.className = 'mb-3 text-gray-900';
+  content.textContent = p.content || '';
 
-  // reply button: show inline input
-  const replyBtn = clone.querySelector('.replyBtn');
-  replyBtn.onclick = () => {
-    if(clone.querySelector('.replyBox')) return;
-    const box = document.createElement('div');
-    box.className = 'replyBox mt-2';
-    box.innerHTML = `<input placeholder="reply..." class="w-full p-2 border replyInput" />
-      <button class="mt-1 replySend px-3 py-1 bg-blue-600 text-white rounded">Send</button>`;
-    replyBtn.after(box);
-    box.querySelector('.replySend').onclick = async () => {
-      const content = box.querySelector('.replyInput').value;
-      if(!content) return;
-      try {
-        await apiFetch(COMMENT_URL + '/' + node.postId, { method: 'POST', body: JSON.stringify({ content, parentCommentId: node._id }) });
-        // rerender comments for post
-        const top = findNearestAncestorWithClass(replyBtn, 'comments') || repliesContainer;
-        const postContainer = top.closest('.bg-white');
-        const commentsDiv = postContainer.querySelector('.comments');
-        await renderCommentsForPost(node.postId, commentsDiv);
-      } catch(e){ console.error(e); alert('reply failed'); }
-    };
+  // actions
+  const actions = document.createElement('div');
+  actions.className = 'flex items-center gap-4';
+
+  // like
+  const likeBtn = document.createElement('button');
+  likeBtn.className = 'flex items-center gap-2 text-sm';
+  likeBtn.innerHTML = `<svg class="w-5 h-5 ${p.liked ? 'text-red-500' : 'text-gray-500'}" viewBox="0 0 24 24" fill="${p.liked ? 'currentColor' : 'none'}" stroke="currentColor"><path d="M12 21s-6-4.35-9-7.36C-1 8.12 3 4 7 4c2.87 0 4.07 1.79 5 3 .93-1.21 2.13-3 5-3 4 0 8 4.12 4 9.64C18 16.65 12 21 12 21z"/></svg> <span class="likesCount">${p.likesCount||0}</span>`;
+  actions.appendChild(likeBtn);
+
+  // reply toggle (no nested shown yet)
+  const replyToggle = document.createElement('button');
+  replyToggle.className = 'text-sm text-gray-600';
+  replyToggle.textContent = 'Reply';
+  actions.appendChild(replyToggle);
+
+  // comments area (top-level comments only)
+  const commentsDiv = document.createElement('div');
+  commentsDiv.className = 'mt-3';
+
+  // comment input
+  const commentBox = document.createElement('div');
+  commentBox.innerHTML = `<input placeholder="Add a comment..." class="commentInput border p-2 w-full rounded" />
+    <button class="btnComment mt-2 bg-gray-800 text-white px-3 py-1 rounded">Comment</button>`;
+
+  wrap.appendChild(header);
+  wrap.appendChild(content);
+  wrap.appendChild(actions);
+  wrap.appendChild(commentsDiv);
+  wrap.appendChild(commentBox);
+
+  // load top-level comments for this post
+  renderCommentsForPost(p._id, commentsDiv);
+
+  // like click
+  likeBtn.onclick = async () => {
+    try {
+      likeBtn.disabled = true;
+      const res = await apiFetch(`${POST_URL}/${p._id}/like`, { method: 'POST' });
+      const svg = likeBtn.querySelector('svg');
+      const countSpan = likeBtn.querySelector('.likesCount');
+      if(res.liked){
+        svg.classList.remove('text-gray-500'); svg.classList.add('text-red-500'); svg.setAttribute('fill','currentColor');
+      } else {
+        svg.classList.remove('text-red-500'); svg.classList.add('text-gray-500'); svg.setAttribute('fill','none');
+      }
+      countSpan.textContent = res.likesCount;
+    } catch(err){ console.error(err); alert('Gagal like'); }
+    finally { likeBtn.disabled = false; }
   };
 
-  // render children
-  if(node.children && node.children.length){
-    node.children.forEach(child => repliesContainer.appendChild(renderCommentNode(child)));
-  }
-  return clone;
+  // comment create
+  const commentBtn = commentBox.querySelector('.btnComment');
+  commentBtn.onclick = async () => {
+    const input = commentBox.querySelector('.commentInput');
+    const txt = input.value.trim();
+    if(!txt) return;
+    try {
+      await apiFetch(`${COMMENT_URL}/${p._id}`, { method: 'POST', body: JSON.stringify({ content: txt }) });
+      input.value = '';
+      // refresh top-level comments
+      await renderCommentsForPost(p._id, commentsDiv);
+    } catch(e){ console.error(e); alert('Gagal menambah komentar'); }
+  };
+
+  return wrap;
 }
 
-/* helper: escape */
-function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-
-/* helper: find ancestor with class */
-function findNearestAncestorWithClass(el, cls){
-  let cur = el;
-  while(cur && cur !== document.body){
-    if(cur.classList && cur.classList.contains(cls)) return cur;
-    cur = cur.parentElement;
+/* render top-level comments and each comment only shows immediate replies via button */
+async function renderCommentsForPost(postId, targetEl){
+  targetEl.innerHTML = 'Loading comments...';
+  try {
+    const res = await apiFetch(`${COMMENT_URL}/${postId}`);
+    const comments = res.comments || [];
+    targetEl.innerHTML = '';
+    for(const c of comments){
+      targetEl.appendChild(renderCommentNode(c));
+    }
+  } catch(e){
+    console.error(e);
+    targetEl.innerHTML = '<div class="text-sm text-red-500">Gagal memuat komentar.</div>';
   }
-  return null;
 }
+
+/* render a comment node (shows author.username and a "Show replies" button if it has children) */
+function renderCommentNode(node){
+  const container = document.createElement('div');
+  container.className = 'pl-4 border-l mt-2';
+
+  const meta = document.createElement('div');
+  meta.className = 'text-sm';
+  meta.innerHTML = `<strong>${escapeHtml(node.author && node.author.username || node.authorId)}</strong> <span class="text-gray-500 text-xs">${new Date(node.createdAt).toLocaleString()}</span>`;
+
+  const content = document.createElement('div');
+  content.className = 'content mt-1';
+  content.textContent = node.content;
+
+  container.appendChild(meta);
+  container.appendChild(content);
+
+  // replies placeholder
+  const repliesContainer = document.createElement('div');
+  repliesContainer.className = 'replies mt-2';
+
+  // show replies button: we don't know if it has replies without hitting endpoint, so show button and fetch on click
+  const showRepliesBtn = document.createElement('button');
+  showRepliesBtn.className = 'text-sm text-blue-600 mt-1';
+  showRepliesBtn.textContent = 'Show replies';
+  showRepliesBtn.onclick = async () => {
+    showRepliesBtn.disabled = true;
+    showRepliesBtn.textContent = 'Loading...';
+    try {
+      const r = await apiFetch(`${COMMENT_URL}/replies/${node._id}`);
+      const replies = r.replies || [];
+      repliesContainer.innerHTML = '';
+      if(replies.length === 0){
+        repliesContainer.innerHTML = '<div class="text-sm text-gray-500">No replies</div>';
+      } else {
+        for(const rep of replies){
+          const repNode = renderCommentNode(rep); // recursion for rendering reply (but replies of replies are not auto-fetched)
+          repliesContainer.appendChild(repNode);
+        }
+      }
+      showRepliesBtn.remove();
+    } catch(err){
+      console.error(err);
+      showRepliesBtn.disabled = false;
+      showRepliesBtn.textContent = 'Show replies';
+      alert('Gagal memuat replies');
+    }
+  };
+
+  // append showReplies button (always present for user to click)
+  container.appendChild(showRepliesBtn);
+  container.appendChild(repliesContainer);
+
+  return container;
+}
+
+/* helper escape */
+function escapeHtml(s){ return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
