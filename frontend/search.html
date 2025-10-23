@@ -6,21 +6,27 @@
   <title>Search — ThreadsClone</title>
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@latest/dist/tailwind.min.css" rel="stylesheet">
   <script src="js/search.js" defer></script>
+  <script src="js/nav.js" defer></script>
 </head>
 <body class="bg-gray-50 min-h-screen p-4">
-  <div class="max-w-4xl mx-auto">
+  <!-- IMPORTANT: add class "tc-content" to the main centered wrapper so nav.js can position the left nav correctly -->
+  <div class="tc-content max-w-4xl mx-auto">
     <div class="bg-white p-4 rounded-xl shadow-sm mb-4">
-      <div class="flex gap-2">
-        <input id="q" class="flex-1 border p-2 rounded" placeholder="Search users or posts..." />
-        <select id="type" class="border p-2 rounded">
-          <option value="posts">Posts</option>
-          <option value="users">Users</option>
-        </select>
-        <button id="btnSearch" class="bg-black text-white px-4 rounded">Search</button>
+      <!-- responsive: stack on small, row on md+ -->
+      <div class="flex flex-col md:flex-row gap-3 items-center tc-search-form">
+        <!-- tc-search-input ensures input can shrink inside flex (min-width:0) -->
+        <input id="q" class="tc-search-input flex-1 border p-2 rounded w-full" placeholder="Search users or posts..." />
+        <div class="flex gap-2 items-center">
+          <select id="type" class="border p-2 rounded">
+            <option value="posts">Posts</option>
+            <option value="users">Users</option>
+          </select>
+          <button id="btnSearch" class="bg-black text-white px-4 py-2 rounded">Search</button>
+        </div>
       </div>
     </div>
 
-    <div id="results"></div>
+    <div id="results" class="space-y-3"></div>
   </div>
 </body>
 </html>
