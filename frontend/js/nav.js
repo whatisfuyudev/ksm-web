@@ -1,5 +1,5 @@
 // frontend/js/nav.js  — REPLACE file content with this
-(function(){
+(function () {
   // prevent double-injection
   if (document.querySelector('.tc-nav-left') || document.querySelector('.tc-bottom-nav')) {
     // already injected
@@ -97,8 +97,9 @@
       <div class="nav-section">
         <a class="nav-item" href="/feed.html">Home</a>
         <a class="nav-item" href="/search.html">Search</a>
-        <a class="nav-item" href="/profile.html">Profile</a>
+        <a class="nav-item" href="/messages.html">Messages</a>
         <a class="nav-item" href="/notifications.html">Notifications</a>
+        <a class="nav-item" href="/profile.html">Profile</a>
       </div>
 
       <button id="tcComposeDesktop" class="nav-item post-btn">Post</button>
@@ -118,8 +119,9 @@
       <svg class="w-6 h-6" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="7" stroke-width="1.5"/></svg>
       <span>Search</span>
     </a>
-    <a id="tcComposeMobile" href="javascript:void(0)" aria-label="Compose">
-      <div style="background:#000;color:#fff;padding:8px;border-radius:9999px">+</div>
+    <a href="/messages.html" aria-label="Messages">
+      <svg class="w-6 h-6" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" stroke-width="1.5"/></svg>
+      <span>Messages</span>
     </a>
     <a href="/notifications.html" aria-label="Notifications">
       <svg class="w-6 h-6" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"><path d="M12 22c2.761 0 5-2.239 5-5V9a5 5 0 10-10 0v8c0 2.761 2.239 5 5 5z" stroke-width="1.5"/></svg>
@@ -136,9 +138,9 @@
   document.body.classList.add('has-tc-nav');
 
   // handlers for compose buttons: focus the first textarea found or go to feed
-  function focusCompose(){
+  function focusCompose() {
     const ta = document.querySelector('textarea#postContent') || document.querySelector('textarea');
-    if(ta){
+    if (ta) {
       window.scrollTo({ top: 0, behavior: 'smooth' });
       ta.focus();
     } else {

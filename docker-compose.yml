@@ -20,12 +20,21 @@ services:
       - mongodb
       - auth-service
 
+  message-service:
+    build: ./message-service
+    env_file: ./message-service/.env
+    ports: ["4002:4002"]
+    depends_on:
+      - mongodb
+      - auth-service
+
   frontend:
     build: ./frontend
     ports: ["3000:80"]
     depends_on:
       - auth-service
       - post-service
+      - message-service
 
 volumes:
   mongo_data:
