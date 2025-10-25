@@ -34,8 +34,8 @@ services:
       - mongodb
     environment:
       - PORT=4002
-      - MONGODB_URI=mongodb://mongo:27017/notifications
-      - SERVICE_KEY=super-secret-service-key-CHANGE_THIS
+      - MONGODB_URI=mongodb://mongodb:27017/notifications
+      - SERVICE_KEY=SECRET_NOTIF
       - AUTH_SERVICE_URL=http://auth-service:4000
     ports:
       - "4002:4002"

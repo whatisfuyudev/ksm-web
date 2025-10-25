@@ -2,6 +2,7 @@
 const NOTIF_SERVICE = (typeof NOTIF_SERVICE_URL !== 'undefined') ? NOTIF_SERVICE_URL : 'http://localhost:4002';
 const NOTIF_API = NOTIF_SERVICE + '/api/notifications';
 const NOTIF_MARK_READ = NOTIF_SERVICE + '/api/notifications'; // PATCH /:id/read
+const PAGE_SIZE = 10;
 
 function getToken(){ return localStorage.getItem('token'); }
 
@@ -31,18 +32,37 @@ async function apiFetch(url, opts = {}) {
 
 function escapeHtml(s){ return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
+/* client-side pagination state */
+const notifState = { offset: 0, totalCount: 0, loading: false };
+
 document.addEventListener('DOMContentLoaded', async () => {
   const out = document.getElementById('notificationsList');
   out.innerHTML = '<div class="text-sm text-gray-500">Loading...</div>';
   try {
-    const data = await apiFetch(NOTIF_API + '?limit=50');
-    const list = data.notifications || [];
-    out.innerHTML = '';
-    if(list.length === 0){
-      out.innerHTML = '<div class="text-sm text-gray-500">No notifications</div>';
-      return;
-    }
+    await loadNotifications(); // load first page
+  } catch(e){
+    console.error(e);
+    out.innerHTML = '<div class="text-sm text-red-500">Failed to load notifications</div>';
+  }
+});
 
+async function loadNotifications(){
+  const out = document.getElementById('notificationsList');
+  if(notifState.loading) return;
+  notifState.loading = true;
+
+  // show loading for first page
+  if(notifState.offset === 0) out.innerHTML = '<div class="text-sm text-gray-500">Loading...</div>';
+
+  try {
+    const res = await apiFetch(`${NOTIF_API}?limit=${PAGE_SIZE}&skip=${notifState.offset}`);
+    const list = res.notifications || [];
+    const total = (typeof res.totalCount === 'number') ? res.totalCount : null;
+    notifState.totalCount = (total !== null) ? total : (notifState.totalCount || (notifState.offset + list.length));
+
+    // if first page, clear container
+    if(notifState.offset === 0) out.innerHTML = '';
+    // append items
     for(const n of list){
       const card = document.createElement('div');
       card.className = 'p-3 bg-white rounded shadow-sm flex justify-between items-start';
@@ -84,6 +104,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         // mark read then navigate
         try {
           await apiFetch(`${NOTIF_MARK_READ}/${n._id}/read`, { method: 'PATCH' });
+          // update badge in UI
+          const b = card.querySelector('.bg-red-100');
+          if(b) b.remove();
         } catch(e){ console.warn('mark read failed', e); }
         // navigate: if notification has postId navigate to post page and anchor to comment if present
         if(n.postId){
@@ -99,8 +122,47 @@ document.addEventListener('DOMContentLoaded', async () => {
       card.appendChild(right);
       out.appendChild(card);
     }
-  } catch(e){
+
+    // update offset
+    notifState.offset += list.length;
+
+    // manage "Load more" button
+    const existing = document.getElementById('notif-loadmore');
+    if(existing) existing.remove();
+
+    const moreRemaining = (typeof notifState.totalCount === 'number')
+      ? (notifState.offset < notifState.totalCount)
+      : (list.length === PAGE_SIZE); // fallback
+
+    if(moreRemaining){
+      const wrapper = document.createElement('div');
+      wrapper.className = 'text-center mt-2';
+      const btn = document.createElement('button');
+      btn.id = 'notif-loadmore';
+      btn.className = 'px-4 py-2 border rounded bg-white';
+      btn.textContent = 'Load more';
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        btn.textContent = 'Loading...';
+        try {
+          await loadNotifications();
+        } finally {
+          if(btn && btn.remove) btn.remove();
+        }
+      });
+      wrapper.appendChild(btn);
+      out.appendChild(wrapper);
+    }
+
+    // if no notifications at all (first page)
+    if(notifState.offset === 0){
+      out.innerHTML = '<div class="text-sm text-gray-500">No notifications</div>';
+    }
+
+  } catch (e){
     console.error(e);
-    out.innerHTML = '<div class="text-sm text-red-500">Failed to load notifications</div>';
+    if(notifState.offset === 0) out.innerHTML = '<div class="text-sm text-red-500">Failed to load notifications</div>';
+  } finally {
+    notifState.loading = false;
   }
-});
+}

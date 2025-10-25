@@ -9,7 +9,7 @@ const axios = require('axios');
 const AUTH_URL = process.env.AUTH_SERVICE_URL || 'http://auth-service:4000';
 const POST_SERVICE = process.env.POST_SERVICE_URL || 'http://post-service:4001';
 const NOTIF_URL = process.env.NOTIF_SERVICE_URL || 'http://notification-service:4002';
-const NOTIF_KEY = process.env.NOTIF_SERVICE_KEY || process.env.SERVICE_KEY || 'super-secret-service-key-CHANGE_THIS';
+const NOTIF_KEY = process.env.NOTIF_SERVICE_KEY || process.env.SERVICE_KEY || 'SECRET_NOTIF';
 
 // create comment/reply
 router.post('/:postId', auth, async (req,res) => {

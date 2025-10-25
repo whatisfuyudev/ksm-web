@@ -9,7 +9,7 @@ const jwt = require('jsonwebtoken');
 const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret';
 const AUTH_URL = process.env.AUTH_SERVICE_URL || 'http://auth-service:4000';
 const NOTIF_URL = process.env.NOTIF_SERVICE_URL || 'http://notification-service:4002';
-const NOTIF_KEY = process.env.NOTIF_SERVICE_KEY || process.env.SERVICE_KEY || 'super-secret-service-key-CHANGE_THIS';
+const NOTIF_KEY = process.env.NOTIF_SERVICE_KEY || process.env.SERVICE_KEY || 'SECRET_NOTIF';
 
 // create post (text-only)
 router.post('/', auth, async (req, res) => {

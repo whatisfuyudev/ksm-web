@@ -16,7 +16,7 @@ app.use(morgan('tiny'));
 const {
   PORT = 4002,
   MONGODB_URI = 'mongodb://localhost:27017/notifications',
-  SERVICE_KEY = 'CHANGE_ME',
+  SERVICE_KEY = process.env.SERVICE_KEY || 'SECRET_NOTIF',
   AUTH_SERVICE_URL = process.env.AUTH_SERVICE_URL || '',
   JWT_SECRET = process.env.JWT_SECRET || ''
 } = process.env;
@@ -28,7 +28,11 @@ mongoose.connect(MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true 
 // internal create notification endpoint (called by other services) protected by SERVICE_KEY
 app.post('/api/internal/notify', async (req, res) => {
   try {
-    const key = req.headers['x-service-key'];
+    const key = req.headers['X-SERVICE-KEY'] || req.headers['x-service-key'];
+
+    console.log('\n\n\n\n',key,'_',  !key, '_', key !== SERVICE_KEY, '_', SERVICE_KEY ,'\n\n\n\n');
+    
+
     if(!key || key !== SERVICE_KEY) return res.status(401).json({ message: 'invalid service key' });
 
     const { recipientId, actorId, actorUsername, type, postId, commentId, meta } = req.body;
