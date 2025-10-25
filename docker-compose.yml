@@ -29,6 +29,7 @@ services:
 
   notification-service:
     build: ./notification-service
+    env_file: ./notification-service/.env
     depends_on:
       - mongodb
     environment:
