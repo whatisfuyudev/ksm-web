@@ -50,16 +50,27 @@ router.post('/:id/like', auth, async (req, res) => {
 
 /**
  * SEARCH (must be before /:id)
- * GET /api/posts/search?q=...
+ * GET /api/posts/search?q=...&page=1&limit=10
  */
 router.get('/search', async (req, res) => {
   try {
     const q = (req.query.q || '').trim();
-    if (!q) return res.json({ posts: [] });
+    if (!q) return res.json({ posts: [], total: 0 });
+
+    // pagination
+    const page = Math.max(1, parseInt(req.query.page || '1', 10));
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit || '10', 10)));
+    const skip = (page - 1) * limit;
 
     // escape regex
-    const regex = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
-    const posts = await Post.find({ content: regex }).sort({ createdAt: -1 }).limit(50).lean();
+    const esc = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(esc, 'i');
+
+    // fetch matching posts with pagination
+    const [posts, total] = await Promise.all([
+      Post.find({ content: regex }).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+      Post.countDocuments({ content: regex })
+    ]);
 
     // map meta (likesCount, liked default false)
     const postsWithMeta = posts.map(p => {
@@ -70,7 +81,7 @@ router.get('/search', async (req, res) => {
       };
     });
 
-    res.json({ posts: postsWithMeta });
+    res.json({ posts: postsWithMeta, total });
   } catch (e) {
     console.error('GET /api/posts/search error:', e);
     res.status(500).json({ message: 'error' });

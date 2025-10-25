@@ -24,7 +24,7 @@ router.post('/:postId', auth, async (req,res) => {
 
     // attach author info
     try {
-      const r = await axios.get(`${AUTH_URL}/api/users/${comment.authorId}`);
+      const r = await axios.get(`${AUTH_URL}/api/users/${comment.authorId}`, { timeout: 2000 });
       comment.author = r.data.user || { username: comment.authorId };
     } catch(e){
       comment.author = { username: comment.authorId };
