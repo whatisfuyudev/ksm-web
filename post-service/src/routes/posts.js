@@ -8,6 +8,8 @@ const jwt = require('jsonwebtoken');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret';
 const AUTH_URL = process.env.AUTH_SERVICE_URL || 'http://auth-service:4000';
+const NOTIF_URL = process.env.NOTIF_SERVICE_URL || 'http://notification-service:4002';
+const NOTIF_KEY = process.env.NOTIF_SERVICE_KEY || process.env.SERVICE_KEY || 'super-secret-service-key-CHANGE_THIS';
 
 // create post (text-only)
 router.post('/', auth, async (req, res) => {
@@ -41,7 +43,32 @@ router.post('/:id/like', auth, async (req, res) => {
       liked = false;
     }
     await post.save();
-    return res.json({ liked, likesCount: (post.likes || []).length });
+    const likesCount = (post.likes || []).length;
+
+    // send notification only when newly liked (not when unliked)
+    if (liked) {
+      try {
+        const recipientId = post.authorId || (post.author && post.author._id);
+        if (recipientId && String(recipientId) !== String(userId)) {
+          const payload = {
+            recipientId,
+            actorId: userId,
+            actorUsername: req.user.username || null,
+            type: 'like',
+            postId,
+            meta: {}
+          };
+          await axios.post(`${NOTIF_URL}/api/internal/notify`, payload, {
+            headers: { 'X-SERVICE-KEY': NOTIF_KEY },
+            timeout: 2000
+          });
+        }
+      } catch(e) {
+        console.warn('notify like failed', e && e.message ? e.message : e);
+      }
+    }
+
+    return res.json({ liked, likesCount });
   } catch (err) {
     console.error('POST /:id/like error:', err);
     return res.status(500).json({ message: 'error' });
@@ -93,7 +120,7 @@ router.get('/author/:authorId', async (req, res) => {
   try {
     const { authorId } = req.params;
     const posts = await Post.find({ authorId }).sort({ createdAt: -1 }).lean();
-    const postsWithMeta = posts.map(p => ({
+    const postsWithMeta = posts.map(p => ( {
       ...p,
       likesCount: (p.likes || []).length,
       liked: false,

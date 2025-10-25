@@ -7,6 +7,9 @@ const mongoose = require('mongoose');
 const axios = require('axios');
 
 const AUTH_URL = process.env.AUTH_SERVICE_URL || 'http://auth-service:4000';
+const POST_SERVICE = process.env.POST_SERVICE_URL || 'http://post-service:4001';
+const NOTIF_URL = process.env.NOTIF_SERVICE_URL || 'http://notification-service:4002';
+const NOTIF_KEY = process.env.NOTIF_SERVICE_KEY || process.env.SERVICE_KEY || 'super-secret-service-key-CHANGE_THIS';
 
 // create comment/reply
 router.post('/:postId', auth, async (req,res) => {
@@ -22,13 +25,73 @@ router.post('/:postId', auth, async (req,res) => {
       authorId: req.user.id, content
     });
 
-    // attach author info
+    // Attach author info (best-effort). Also ensure username is available immediately from req.user
     try {
+      // try auth-service first (fast)
       const r = await axios.get(`${AUTH_URL}/api/users/${comment.authorId}`, { timeout: 2000 });
-      comment.author = r.data.user || { username: comment.authorId };
+      comment.author = r.data.user || { username: req.user.username || comment.authorId };
     } catch(e){
-      comment.author = { username: comment.authorId };
+      // fallback to token-provided username (so UI doesn't show id briefly)
+      comment.author = { username: req.user.username || comment.authorId };
     }
+
+    // --- background: build and send notification (non-blocking) ---
+    (async () => {
+      try {
+        const actorId = req.user.id;
+        const actorUsername = req.user.username || null;
+
+        let recipientId = null;
+        let notifType = parentCommentId ? 'reply' : 'comment';
+
+        if(parentCommentId) {
+          // notify owner of parent comment
+          try {
+            const parent = await Comment.findById(parentCommentId).lean();
+            if(parent && parent.authorId) recipientId = parent.authorId;
+          } catch(e) {
+            console.warn('notify: failed to fetch parent comment', e && e.message ? e.message : e);
+          }
+        } else {
+          // top-level comment -> notify post owner (ask post service)
+          try {
+            const pr = await axios.get(`${POST_SERVICE}/api/posts/${postId}`, { timeout: 2000 });
+            if(pr.data && pr.data.post) {
+              const postObj = pr.data.post;
+              recipientId = postObj.authorId || (postObj.author && postObj.author._id) || null;
+            }
+          } catch(e) {
+            console.warn('notify: cannot fetch post owner', e && e.message ? e.message : e);
+          }
+        }
+
+        // do not notify actor themself
+        if(recipientId && String(recipientId) !== String(actorId)) {
+          // build payload minimal
+          const payload = {
+            recipientId,
+            actorId,
+            actorUsername,
+            type: notifType,
+            postId,
+            commentId: comment._id,
+            meta: { snippet: String(content || '').slice(0,200) }
+          };
+
+          // call notification service internal endpoint (service key required)
+          try {
+            await axios.post(`${NOTIF_URL}/api/internal/notify`, payload, {
+              headers: { 'X-SERVICE-KEY': NOTIF_KEY },
+              timeout: 2000
+            });
+          } catch(e) {
+            console.warn('notify: post to notif service failed', e && e.message ? e.message : e);
+          }
+        }
+      } catch(e) {
+        console.warn('notify: unexpected error', e && e.message ? e.message : e);
+      }
+    })();
 
     res.json({ comment });
   } catch(e) { console.error(e); res.status(500).json({ message:'error' }); }
@@ -46,7 +109,7 @@ router.get('/:postId', async (req,res) => {
     // for each comment determine if it has children and attach author info
     const commentsWithMeta = await Promise.all(comments.map(async c => {
       try {
-        const r = await axios.get(`${AUTH_URL}/api/users/${c.authorId}`);
+        const r = await axios.get(`${AUTH_URL}/api/users/${c.authorId}`, { timeout: 2000 });
         c.author = r.data.user || { username: c.authorId };
       } catch(e){
         c.author = { username: c.authorId };
@@ -76,7 +139,7 @@ router.get('/replies/:commentId', async (req,res) => {
     // attach author + hasChildren for each reply
     const repliesWithMeta = await Promise.all(replies.map(async r => {
       try {
-        const rr = await axios.get(`${AUTH_URL}/api/users/${r.authorId}`);
+        const rr = await axios.get(`${AUTH_URL}/api/users/${r.authorId}`, { timeout: 2000 });
         r.author = rr.data.user || { username: r.authorId };
       } catch(e){ r.author = { username: r.authorId }; }
 

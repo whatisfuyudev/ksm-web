@@ -1,0 +1,20 @@
+Example axios POST (call from posts/comments service after creating the item):
+
+// comment or reply
+await axios.post('http://notification-service:4002/api/internal/notify', {
+  recipientId: targetUserId,
+  actorId: req.user.id,
+  actorUsername: req.user.username,
+  type: parentCommentId ? 'reply' : 'comment',
+  postId: postId,
+  commentId: comment._id
+}, { headers: { 'X-SERVICE-KEY': process.env.NOTIF_SERVICE_KEY }, timeout: 3000 });
+
+// like
+await axios.post('http://notification-service:4002/api/internal/notify', {
+  recipientId: post.authorId,
+  actorId: req.user.id,
+  actorUsername: req.user.username,
+  type: 'like',
+  postId: post._id
+}, { headers: { 'X-SERVICE-KEY': process.env.NOTIF_SERVICE_KEY }, timeout: 3000 });

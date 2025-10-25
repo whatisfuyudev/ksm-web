@@ -1,78 +1,106 @@
-const POST_URL = 'http://localhost:4001/api/posts';
-const COMMENT_URL = 'http://localhost:4001/api/comments';
-const AUTH_URL = 'http://localhost:4000/api/auth';
+// frontend/js/notifications.js
+const NOTIF_SERVICE = (typeof NOTIF_SERVICE_URL !== 'undefined') ? NOTIF_SERVICE_URL : 'http://localhost:4002';
+const NOTIF_API = NOTIF_SERVICE + '/api/notifications';
+const NOTIF_MARK_READ = NOTIF_SERVICE + '/api/notifications'; // PATCH /:id/read
 
 function getToken(){ return localStorage.getItem('token'); }
+
 async function apiFetch(url, opts = {}) {
+  opts = opts || {};
   opts.headers = opts.headers || {};
   const token = getToken();
   if(token) opts.headers['Authorization'] = 'Bearer ' + token;
-  if(!opts.body) opts.headers['Content-Type'] = opts.headers['Content-Type'] || 'application/json';
+
+  // do not force content-type on GET
+  if(opts.body && typeof opts.body === 'object' && !(opts.body instanceof FormData)) {
+    opts.headers['Content-Type'] = opts.headers['Content-Type'] || 'application/json';
+    opts.body = JSON.stringify(opts.body);
+  }
+
   const res = await fetch(url, opts);
-  if(res.status === 401){ window.location = '/login.html'; throw new Error('unauthorized'); }
-  return res.json();
+  if(res.status === 401){
+    // not authenticated
+    localStorage.removeItem('token');
+    window.location = '/login.html';
+    throw new Error('unauthorized');
+  }
+  const ct = res.headers.get('content-type') || '';
+  if(ct.includes('application/json')) return res.json();
+  return res.text();
 }
 
-document.addEventListener('DOMContentLoaded', async () => {
-  // naive implementation: find posts by me, then find comments and likes by others
-  try {
-    const token = getToken();
-    if(!token){ window.location = '/login.html'; return; }
-    let me;
-    try {
-      const r = await fetch(`${AUTH_URL}/me`, { headers:{ Authorization: 'Bearer ' + token } });
-      if(r.ok){ const json = await r.json(); me = json.user; }
-    } catch(e){}
-    if(!me){
-      const payload = JSON.parse(atob(token.split('.')[1]));
-      me = { id: payload.id, username: payload.username };
-    }
-
-    const out = document.getElementById('notificationsList');
-    out.innerHTML = 'Loading...';
-
-    // get my posts
-    const postsRes = await apiFetch(`${POST_URL}/author/${me.id}`);
-    const posts = postsRes.posts || [];
-
-    const notifications = [];
-
-    // find recent comments on my posts (top-level or replies)
-    for(const p of posts){
-      const cRes = await apiFetch(`${COMMENT_URL}/${p._id}`);
-      const top = cRes.comments || [];
-      // mark top-level comments as notifications
-      for(const c of top){
-        if(String(c.authorId) !== String(me.id)) { // note: author object exists too
-          notifications.push({ type: 'comment', postId: p._id, postContent: p.content, comment: c });
-        }
-      }
-      // Also check replies: we'll fetch replies for each top-level comment but only first-level
-      for(const tl of top){
-        const rRes = await apiFetch(`${COMMENT_URL}/replies/${tl._id}`);
-        for(const rep of (rRes.replies||[])){
-          if(String(rep.authorId) !== String(me.id)){
-            notifications.push({ type: 'reply', postId: p._id, postContent: p.content, comment: rep });
-          }
-        }
-      }
-    }
-
-    // likes: naive approach - check each post's likesCount > 0 and get latest (requires expanding)
-    // For brevity, show comment notifications first
-    out.innerHTML = '';
-    if(notifications.length === 0) out.innerHTML = '<div class="text-gray-600">No notifications</div>';
-    for(const n of notifications){
-      const d = document.createElement('div');
-      d.className = 'p-3 bg-white rounded shadow-sm';
-      if(n.type === 'comment' || n.type === 'reply'){
-        const author = n.comment.author ? n.comment.author.username : (n.comment.authorId || 'someone');
-        d.innerHTML = `<div class="text-sm"><strong>${escapeHtml(author)}</strong> commented on your post: <div class="mt-1 text-gray-800">${escapeHtml(n.comment.content)}</div></div>
-          <div class="mt-2 text-sm text-gray-500">${new Date(n.comment.createdAt).toLocaleString()}</div>`;
-      }
-      out.appendChild(d);
-    }
-  } catch(e){ console.error(e); document.getElementById('notificationsList').innerHTML = 'Failed to load'; }
-});
-
 function escapeHtml(s){ return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+document.addEventListener('DOMContentLoaded', async () => {
+  const out = document.getElementById('notificationsList');
+  out.innerHTML = '<div class="text-sm text-gray-500">Loading...</div>';
+  try {
+    const data = await apiFetch(NOTIF_API + '?limit=50');
+    const list = data.notifications || [];
+    out.innerHTML = '';
+    if(list.length === 0){
+      out.innerHTML = '<div class="text-sm text-gray-500">No notifications</div>';
+      return;
+    }
+
+    for(const n of list){
+      const card = document.createElement('div');
+      card.className = 'p-3 bg-white rounded shadow-sm flex justify-between items-start';
+      card.dataset.notifId = n._id;
+
+      const left = document.createElement('div');
+      const actor = n.actorUsername || n.actorId || 'Someone';
+      let text = '';
+      if(n.type === 'comment') text = `<strong>${escapeHtml(actor)}</strong> commented on your post`;
+      else if(n.type === 'reply') text = `<strong>${escapeHtml(actor)}</strong> replied to your comment`;
+      else if(n.type === 'like') text = `<strong>${escapeHtml(actor)}</strong> liked your post`;
+      else text = `<strong>${escapeHtml(actor)}</strong> did something`;
+
+      left.innerHTML = `${text}<div class="mt-1 text-gray-800">${escapeHtml((n.meta && n.meta.snippet) || '')}</div>
+        <div class="mt-2 text-xs text-gray-500">${new Date(n.createdAt).toLocaleString()}</div>`;
+
+      const right = document.createElement('div');
+      right.style.minWidth = '8rem';
+      right.className = 'flex flex-col items-end gap-2';
+
+      // unread badge
+      if(!n.read){
+        const badge = document.createElement('div');
+        badge.className = 'text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded';
+        badge.textContent = 'New';
+        right.appendChild(badge);
+      } else {
+        const spacer = document.createElement('div');
+        spacer.style.height = '1rem';
+        right.appendChild(spacer);
+      }
+
+      // "Open" button
+      const openBtn = document.createElement('button');
+      openBtn.className = 'text-sm text-blue-600';
+      openBtn.textContent = 'Open';
+      openBtn.addEventListener('click', async (ev) => {
+        ev.preventDefault();
+        // mark read then navigate
+        try {
+          await apiFetch(`${NOTIF_MARK_READ}/${n._id}/read`, { method: 'PATCH' });
+        } catch(e){ console.warn('mark read failed', e); }
+        // navigate: if notification has postId navigate to post page and anchor to comment if present
+        if(n.postId){
+          const anchor = n.commentId ? `#c-${n.commentId}` : '';
+          window.location = `/post.html?id=${encodeURIComponent(n.postId)}${anchor}`;
+        } else {
+          window.location = '/notifications.html';
+        }
+      });
+      right.appendChild(openBtn);
+
+      card.appendChild(left);
+      card.appendChild(right);
+      out.appendChild(card);
+    }
+  } catch(e){
+    console.error(e);
+    out.innerHTML = '<div class="text-sm text-red-500">Failed to load notifications</div>';
+  }
+});

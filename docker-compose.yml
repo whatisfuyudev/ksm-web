@@ -27,5 +27,17 @@ services:
       - auth-service
       - post-service
 
+  notification-service:
+    build: ./notification-service
+    depends_on:
+      - mongodb
+    environment:
+      - PORT=4002
+      - MONGODB_URI=mongodb://mongo:27017/notifications
+      - SERVICE_KEY=super-secret-service-key-CHANGE_THIS
+      - AUTH_SERVICE_URL=http://auth-service:4000
+    ports:
+      - "4002:4002"
+
 volumes:
   mongo_data:
