@@ -70,6 +70,7 @@
       <div class="nav-section">
         <a class="nav-item" href="/feed.html">Home</a>
         <a class="nav-item" href="/search.html">Search</a>
+        <a class="nav-item" href="/messages.html">Messages</a>
         <a class="nav-item" href="/profile.html">Profile</a>
         <a class="nav-item" href="/notifications.html">Notifications</a>
       </div>
@@ -87,9 +88,16 @@
     <a href="/search.html" aria-label="Search">
       <svg class="w-6 h-6" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="7" stroke-width="1.5"/></svg><span>Search</span>
     </a>
-    <a id="tcComposeMobile" href="javascript:void(0)" aria-label="Compose">
-      <div style="background:#000;color:#fff;padding:8px;border-radius:9999px">+</div>
+
+    <!-- center: messages (replaces previous compose + button) -->
+    <a href="/messages.html" id="tcMessagesMobile" aria-label="Messages" style="transform:translateY(-12px);">
+      <div style="background:#000;color:#fff;padding:10px;border-radius:9999px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(0,0,0,0.12);">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="color:#fff">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+        </svg>
+      </div>
     </a>
+
     <a href="/notifications.html" aria-label="Notifications">
       <svg class="w-6 h-6" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"><path d="M12 22c2.761 0 5-2.239 5-5V9a5 5 0 10-10 0v8c0 2.761 2.239 5 5 5z" stroke-width="1.5"/></svg><span>Notif</span>
     </a>
@@ -101,14 +109,14 @@
 
   document.body.classList.add('has-tc-nav'); // enable bottom padding on mobile
 
-  // compose handlers
+  // compose handlers (desktop-only)
   function focusCompose(){
     const ta = document.querySelector('textarea#postContent') || document.querySelector('textarea');
     if(ta){ window.scrollTo({ top: 0, behavior: 'smooth' }); ta.focus(); }
     else window.location = '/feed.html';
   }
   document.getElementById('tcComposeDesktop')?.addEventListener('click', focusCompose);
-  document.getElementById('tcComposeMobile')?.addEventListener('click', focusCompose);
+  // mobile center now navigates to /messages.html via anchor href — no JS handler required
 
   // helpers to find the centered container
   function findCenteredContainer(){

@@ -40,5 +40,15 @@ services:
     ports:
       - "4002:4002"
 
+  message-service:
+    build: ./message-service
+    env_file: ./message-service/.env
+    ports:
+      - "4003:4003"
+    depends_on:
+      - mongodb
+      - auth-service
+
+
 volumes:
   mongo_data:
